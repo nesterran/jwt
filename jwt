@@ -1,0 +1,40 @@
+#!/bin/bash -eu
+
+main() {
+    
+    if ! command -v jq &> /dev/null
+    then
+        echo "install jq https://stedolan.github.io/jq/"
+        exit 1
+    fi
+    jwt=`cat -|tr -d '\r \n'`
+    array=($(tr '.' '\n'<<<"$jwt"))
+    head=`toBase64 "${array[@]:0:1}"`
+    body=`toBase64 "${array[@]:1:1}"`
+    sign=`toBase64 "${array[@]:2:1}"`
+    echo $head|base64 -d|jq
+    echo $body|base64 -d|jq
+    if [ "$#" == "2" ]; then
+        # verify signature
+        sign=$(toBase64 "${array[@]:2:1}")
+        temp_dir=$(mktemp -d)
+        echo -n "${array[@]:0:1}.${array[@]:1:1}" > "$temp_dir/data"
+        echo -n "$sign"|base64 -d > "$temp_dir/sign"
+        openssl dgst -verify "$2" -signature "$temp_dir/sign" "$temp_dir/data"
+        rm -rf "$temp_dir"
+    fi
+}
+
+toBase64(){
+    str=`tr '_-' '/+'<<<"$1"`
+    len=${#str}
+    case $(($len%4)) in
+        2) str="$str==";;
+        3) str="$str=";;
+    esac
+    echo "$str" 
+}
+
+main "$@"
+
+
